@@ -25,6 +25,7 @@
 from django.urls import path
 from .views import UserActionView
 
+
 urlpatterns = [
     path('action/', UserActionView.as_view(), name='user_action'),
 ]
