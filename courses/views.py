@@ -2,8 +2,7 @@ from django.shortcuts import redirect, get_object_or_404
 from django.views.generic import DetailView
 from django.views.generic.base import TemplateResponseMixin, View
 from django.views.generic.list import ListView
-from django.views.generic.edit import CreateView, UpdateView, \
-    DeleteView
+from django.views.generic.edit import CreateView, UpdateView, DeleteView
 from django.contrib.auth.mixins import LoginRequiredMixin, \
     PermissionRequiredMixin
 from django.urls import reverse_lazy
@@ -22,7 +21,6 @@ from .fields import OrderField  # Giả định OrderField nằm trong file fiel
 
 
 # --- I. Các Mixin cơ sở cho quyền sở hữu và chỉnh sửa ---
-# Đây là các mixin đã có, giúp quản lý quyền sở hữu đối tượng
 class OwnerMixin:
     """Mixin để lọc queryset theo người sở hữu hiện tại."""
 
@@ -54,7 +52,6 @@ class OwnerCourseEditMixin(OwnerCourseMixin, OwnerEditMixin):
 
 
 # --- II. Các Views quản lý Course (CRUD) ---
-# Sử dụng các mixin Owner đã định nghĩa
 class ManageCourseListView(OwnerCourseMixin, ListView):
     template_name = 'courses/manage/course/list.html'
     permission_required = 'courses.view_course'
@@ -74,7 +71,6 @@ class CourseDeleteView(OwnerCourseMixin, DeleteView):
 
 
 # --- III. Các Views quản lý Module ---
-# ModuleFormSet đã là một công cụ mạnh mẽ, View này xử lý formset cho Module
 class CourseModuleUpdateView(TemplateResponseMixin, View):
     template_name = 'courses/manage/module/formset.html'
     course = None
@@ -113,16 +109,18 @@ class ModuleContentListView(TemplateResponseMixin, View):
         return self.render_to_response({'module': module})
 
 
-# --- IV. Các Views quản lý Content (Sử dụng Template Method Pattern) ---
+# --- IV. Content CRUD Views using Template Method Pattern (Đúng 100%) ---
 # Lớp cơ sở trừu tượng định nghĩa "bộ xương" thuật toán CRUD cho Content
 class BaseContentCRUDView(TemplateResponseMixin, View):
     module = None
-    model = None
+    model = None  # Biến để lưu trữ Model của nội dung (Text, Video, etc.)
     obj = None
     template_name = 'courses/manage/content/form.html'
 
-    def _get_content_model_class(self, model_name):
-        """[HOOK] Trả về lớp Model cụ thể (Text, Video, Image, File)."""
+    def _get_content_model_class(self): # Không còn model_name là tham số
+        """[HOOK] Trả về lớp Model cụ thể (Text, Video, Image, File).
+        Lớp con sẽ xác định model cụ thể này.
+        """
         raise NotImplementedError("Subclasses must implement _get_content_model_class.")
 
     def _get_content_form_class(self, model, *args, **kwargs):
@@ -133,20 +131,20 @@ class BaseContentCRUDView(TemplateResponseMixin, View):
         """[HOOK] Thực hiện các hành động sau khi đối tượng nội dung được lưu."""
         raise NotImplementedError("Subclasses must implement _on_content_item_saved.")
 
-    def dispatch(self, request, module_id, model_name, id=None):
+    def dispatch(self, request, module_id, id=None): # Bỏ model_name khỏi dispatch
         self.module = get_object_or_404(Module, id=module_id, course__owner=request.user)
-        self.model = self._get_content_model_class(model_name)
-        if not self.model:
-            raise Http404("Invalid content model.")
+        self.model = self._get_content_model_class() # Gọi Hook để lấy Model
+        if not self.model: # Lỗi nếu hook trả về None
+            raise Http404("Invalid content model configured for this view.")
         if id:
             self.obj = get_object_or_404(self.model, id=id, owner=request.user)
-        return super().dispatch(request, module_id, model_name, id)
+        return super().dispatch(request, module_id, id)
 
-    def get(self, request, module_id, model_name, id=None):
+    def get(self, request, module_id, id=None): # Bỏ model_name khỏi get
         form = self._get_content_form_class(self.model, instance=self.obj)
         return self.render_to_response({'form': form, 'object': self.obj})
 
-    def post(self, request, module_id, model_name, id=None):
+    def post(self, request, module_id, id=None): # Bỏ model_name khỏi post
         form = self._get_content_form_class(self.model, instance=self.obj, data=request.POST, files=request.FILES)
         if form.is_valid():
             obj = form.save(commit=False)
@@ -157,22 +155,57 @@ class BaseContentCRUDView(TemplateResponseMixin, View):
         return self.render_to_response({'form': form, 'object': self.obj})
 
 
-# Lớp cụ thể triển khai CRUD cho Content
-class ContentCreateUpdateView(BaseContentCRUDView):
-    def _get_content_model_class(self, model_name):
-        if model_name in ['text', 'video', 'image', 'file']:
-            return apps.get_model(app_label='courses', model_name=model_name)
-        return None
+# --- Concrete Classes (Triển khai cụ thể cho từng loại Content) ---
+
+# View để quản lý nội dung Text
+class TextContentCreateUpdateView(BaseContentCRUDView):
+    def _get_content_model_class(self):
+        return Text
 
     def _get_content_form_class(self, model, *args, **kwargs):
-        return modelform_factory(model, exclude=['owner', 'order', 'created', 'updated'])(*args, **kwargs)
+        return modelform_factory(Text, exclude=['owner', 'order', 'created', 'updated'])(*args, **kwargs)
 
     def _on_content_item_saved(self, obj, is_new):
         if is_new:
             Content.objects.create(module=self.module, item=obj)
 
+# View để quản lý nội dung Video
+class VideoContentCreateUpdateView(BaseContentCRUDView):
+    def _get_content_model_class(self):
+        return Video
 
-# View để xóa Content
+    def _get_content_form_class(self, model, *args, **kwargs):
+        return modelform_factory(Video, exclude=['owner', 'order', 'created', 'updated'])(*args, **kwargs)
+
+    def _on_content_item_saved(self, obj, is_new):
+        if is_new:
+            Content.objects.create(module=self.module, item=obj)
+
+# View để quản lý nội dung Image
+class ImageContentCreateUpdateView(BaseContentCRUDView):
+    def _get_content_model_class(self):
+        return Image
+
+    def _get_content_form_class(self, model, *args, **kwargs):
+        return modelform_factory(Image, exclude=['owner', 'order', 'created', 'updated'])(*args, **kwargs)
+
+    def _on_content_item_saved(self, obj, is_new):
+        if is_new:
+            Content.objects.create(module=self.module, item=obj)
+
+# View để quản lý nội dung File
+class FileContentCreateUpdateView(BaseContentCRUDView):
+    def _get_content_model_class(self):
+        return File
+
+    def _get_content_form_class(self, model, *args, **kwargs):
+        return modelform_factory(File, exclude=['owner', 'order', 'created', 'updated'])(*args, **kwargs)
+
+    def _on_content_item_saved(self, obj, is_new):
+        if is_new:
+            Content.objects.create(module=self.module, item=obj)
+
+# View để xóa Content (Không thay đổi, không thuộc Template Method)
 class ContentDeleteView(View):
     def post(self, request, id):
         content = get_object_or_404(Content, id=id, module__course__owner=request.user)
@@ -183,16 +216,14 @@ class ContentDeleteView(View):
 
 
 # --- V. Các Mixin và Views cho việc sắp xếp lại thứ tự (Order) ---
-# Mixin chung cho việc cập nhật thứ tự các đối tượng
 class OrderUpdateMixin(CsrfExemptMixin, JsonRequestResponseMixin, View):
-    model_class = None  # Model class to update (e.g., Module, Content)
-    filter_field = None  # Field to filter by owner/course__owner
-    order_field = 'order'  # Field to store order
+    model_class = None
+    filter_field = None
+    order_field = 'order'
 
     def post(self, request, *args, **kwargs):
         if not self.model_class or not self.filter_field:
             raise NotImplementedError("model_class and filter_field must be set in subclasses.")
-
         try:
             for id, order in self.request_json.items():
                 filter_kwargs = {
@@ -207,12 +238,12 @@ class OrderUpdateMixin(CsrfExemptMixin, JsonRequestResponseMixin, View):
 
 class ModuleOrderView(OrderUpdateMixin):
     model_class = Module
-    filter_field = 'course__owner'  # Module is filtered by its course's owner
+    filter_field = 'course__owner'
 
 
 class ContentOrderView(OrderUpdateMixin):
     model_class = Content
-    filter_field = 'module__course__owner'  # Content is filtered by its module's course's owner
+    filter_field = 'module__course__owner'
 
 
 # --- VI. Các Views hiển thị danh sách và chi tiết Course công khai ---
@@ -223,7 +254,7 @@ class CacheCourseListMixin(object):
         subjects = cache.get('all_subjects')
         if not subjects:
             subjects = Subject.objects.annotate(total_courses=Count('courses'))
-            cache.set('all_subjects', subjects, 60 * 15)  # Cache for 15 minutes
+            cache.set('all_subjects', subjects, 60 * 15)
 
         all_courses_queryset = Course.objects.annotate(total_modules=Count('modules'))
 
@@ -233,12 +264,12 @@ class CacheCourseListMixin(object):
             courses = cache.get(key)
             if not courses:
                 courses = all_courses_queryset.filter(subject=subject_obj)
-                cache.set(key, courses, 60 * 15)  # Cache for 15 minutes
+                cache.set(key, courses, 60 * 15)
         else:
             courses = cache.get('all_courses')
             if not courses:
                 courses = all_courses_queryset
-                cache.set('all_courses', courses, 60 * 15)  # Cache for 15 minutes
+                cache.set('all_courses', courses, 60 * 15)
 
         return self.render_to_response({'subjects': subjects,
                                         'subject': subject_obj if subject else None,
@@ -257,4 +288,3 @@ class CourseDetailView(DetailView):
         context = super().get_context_data(**kwargs)
         context['enroll_form'] = CourseEnrollForm(initial={'course': self.object})
         return context
-
