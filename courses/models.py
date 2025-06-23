@@ -19,13 +19,41 @@ class Component:
     def is_composite(self):
         return False
 
-class Subject(models.Model):
+class Subject(models.Model, Component):
     title = models.CharField(max_length=200)
     slug = models.SlugField(max_length=200, unique=True)
+    parent = models.ForeignKey('self', null=True, blank=True, related_name='subsubjects', on_delete=models.CASCADE)
+
     class Meta:
         ordering = ['title']
+
     def __str__(self):
         return self.title
+
+    @property
+    def children(self):
+        # Trả về các môn học con (sub-subjects) và các khóa học thuộc môn học này
+        return list(self.subsubjects.all()) + list(self.courses.all())
+
+    def is_composite(self):
+        # Subject là composite nếu có sub-subject hoặc course
+        return self.subsubjects.exists() or self.courses.exists()
+
+    def add(self, child):
+        # Thêm sub-subject hoặc course vào subject này
+        if isinstance(child, Subject):
+            child.parent = self
+            child.save()
+        elif hasattr(child, 'subject'):
+            child.subject = self
+            child.save()
+
+    def remove(self, child):
+        # Xóa sub-subject hoặc course khỏi subject này
+        if isinstance(child, Subject):
+            child.delete()
+        elif hasattr(child, 'subject'):
+            child.delete()
 
 class Course(models.Model, Component):
     owner = models.ForeignKey(User, related_name='courses_created', on_delete=models.CASCADE)
