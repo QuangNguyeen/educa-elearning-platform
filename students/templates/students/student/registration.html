@@ -1,19 +1,66 @@
 {% extends "base.html" %}
 
-{% block title %}
-  Sign up
-{% endblock %}
+{% block title %}Đăng ký người dùng{% endblock %}
 
 {% block content %}
-  <h1>
-    Sign up
-  </h1>
-  <div class="module">
-    <p>Enter your details to create an account:</p>
-    <form method="post">
-      {{ form.as_p }}
-      {% csrf_token %}
-      <p><input type="submit" value="Create my account"></p>
-    </form>
-  </div>
+<h1>Đăng ký người dùng</h1>
+
+<form id="registerForm">
+    <label>Loại người dùng:
+        <select id="type" name="type">
+            <option value="student">Student</option>
+            <option value="teacher">Teacher</option>
+        </select>
+    </label>
+
+    <label>Username: <input type="text" name="username" required></label>
+    <label>Email: <input type="email" name="email" required></label>
+    <label>Password: <input type="password" name="password" required></label>
+
+    <div id="extraField">
+        <label>Class Name (for Student): <input type="text" name="class_name" required></label>
+    </div>
+
+<button type="button" id="submitBtn">Đăng ký</button>
+</form>
+
+<div id="result" style="margin-top:20px; color: green;"></div>
 {% endblock %}
+
+{% block include_js %}
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script>
+    $('#type').on('change', function () {
+        if (this.value === 'student') {
+            $('#extraField').html('<label>Class Name (for Student): <input type="text" name="class_name" required></label>');
+        } else {
+            $('#extraField').html('<label>Department (for Teacher): <input type="text" name="department" required></label>');
+        }
+    });
+
+    $('#submitBtn').on('click', function (e) {
+
+        e.preventDefault();
+        const formData = $('#registerForm').serializeArray();
+        const data = {};
+        formData.forEach(item => data[item.name] = item.value);
+        data['action'] = 'create';
+
+        $.ajax({
+            url: '/students/action/',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify(data),
+            success: function (response) {
+                $('#result').css('color', 'green').text('✅ Đăng ký thành công: ' + JSON.stringify(response.result));
+                $('#registerForm')[0].reset();
+            },
+            error: function (xhr) {
+                const res = xhr.responseJSON;
+                $('#result').css('color', 'red').text('❌ Lỗi: ' + (res?.error || 'Không xác định'));
+            }
+        });
+    });
+</script>
+{% endblock %}
+
