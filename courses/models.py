@@ -44,17 +44,35 @@ class Course(models.Model, Component):
 
     @property
     def children(self):
+        """
+        Trả về danh sách các module thuộc khóa học này (Composite pattern).
+        """
         return self.modules.all()
 
     def is_composite(self):
+        """
+        Khóa học là composite vì có thể chứa nhiều module.
+        """
         return True
 
     def add(self, child):
+        """
+        Thêm một module vào khóa học này.
+        """
         child.course = self
         child.save()
 
     def remove(self, child):
+        """
+        Xóa một module khỏi khóa học này.
+        """
         child.delete()
+
+    def get_modules(self):
+        """
+        Lấy danh sách các module của khóa học.
+        """
+        return self.modules.all()
 
 class Module(models.Model, Component):
     course = models.ForeignKey(Course, related_name='modules', on_delete=models.CASCADE)
@@ -70,17 +88,35 @@ class Module(models.Model, Component):
 
     @property
     def children(self):
+        """
+        Trả về danh sách các content thuộc module này (Composite pattern).
+        """
         return self.contents.all()
 
     def is_composite(self):
+        """
+        Module là composite vì có thể chứa nhiều content.
+        """
         return True
 
     def add(self, child):
+        """
+        Thêm một content vào module này.
+        """
         child.module = self
         child.save()
 
     def remove(self, child):
+        """
+        Xóa một content khỏi module này.
+        """
         child.delete()
+
+    def get_contents(self):
+        """
+        Lấy danh sách các content của module.
+        """
+        return self.contents.all()
 
 class Content(models.Model, Component):
     module = models.ForeignKey(Module, related_name='contents', on_delete=models.CASCADE)

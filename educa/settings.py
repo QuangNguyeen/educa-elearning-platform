@@ -145,8 +145,7 @@ LOGIN_REDIRECT_URL = reverse_lazy('student_course_list')
 
 CACHES = {
     'default': {
-        'BACKEND': 'django.core.cache.backends.redis.RedisCache',
-        'LOCATION': 'redis://127.0.0.1:6379',
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
     }
 }
 
@@ -173,11 +172,8 @@ ASGI_APPLICATION = 'educa.asgi.application'
 
 CHANNEL_LAYERS = {
     'default': {
-        'BACKEND': 'channels_redis.core.RedisChannelLayer',
-        'CONFIG': {
-            'hosts': [('127.0.0.1', 6379)],
-        },
-    },
+        'BACKEND': 'channels.layers.InMemoryChannelLayer',
+    }
 }
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 MIDDLEWARE.insert(1, 'whitenoise.middleware.WhiteNoiseMiddleware')
